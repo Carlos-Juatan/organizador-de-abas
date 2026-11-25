@@ -1,0 +1,478 @@
+{
+  "name": "Organizador de Abas - Páginas CRUD",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "pages",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b4fcad18-0aad-46d2-862b-668c64aa0eb8",
+      "name": "Webhook - GET Pages",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        200
+      ],
+      "webhookId": "organizador-get-pages"
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "pages",
+        "options": {
+          "sort": "{\"createdAt\": -1}"
+        }
+      },
+      "id": "98b1317a-4262-4777-ab99-ecf1e6e0d5be",
+      "name": "MongoDB - Find Pages",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        200
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatar lista de páginas retornadas do MongoDB\nconst items = $input.all();\nconst pages = [];\n\nfor (const item of items) {\n  const p = item.json;\n  if (p && (p.url || p.id)) {\n    const domain = p.domain || (p.url ? (() => {\n      try {\n        const u = new URL(p.url.startsWith('http') ? p.url : 'https://' + p.url);\n        return u.hostname.replace(/^www\\./, '');\n      } catch (e) {\n        return '';\n      }\n    })() : '');\n\n    pages.push({\n      id: String(p.id || p._id),\n      url: String(p.url || ''),\n      title: String(p.title || domain || 'Sem título'),\n      domain: domain,\n      favicon: p.favicon || (domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64` : ''),\n      groupId: p.groupId !== undefined ? p.groupId : null,\n      notes: p.notes || '',\n      isFavorite: Boolean(p.isFavorite),\n      createdAt: p.createdAt || new Date().toISOString()\n    });\n  }\n}\n\nreturn [{ json: { pages } }];\n"
+      },
+      "id": "73aa5e9a-afc7-4bc1-ba1a-97a6c5292ca9",
+      "name": "Code - Format Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.pages }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a479c9cf-6c60-4e4c-b4d5-1d5a9dd7b5f6",
+      "name": "Respond - Pages List",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pages",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "2436057c-1081-4a15-a632-a6603ca935f7",
+      "name": "Webhook - POST Pages",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        420
+      ],
+      "webhookId": "organizador-post-pages"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Suporta tanto criação individual quanto criação em lote (bulk import)\nlet raw = $json.body;\nif (!raw && Array.isArray($json)) raw = $json;\nif (!raw && typeof $json === 'object') raw = [$json];\nif (!Array.isArray(raw)) raw = [raw];\n\nfunction extractDomain(urlStr) {\n  try {\n    const u = new URL(urlStr.startsWith('http') ? urlStr : 'https://' + urlStr);\n    return u.hostname.replace(/^www\\./, '');\n  } catch (e) {\n    return urlStr || '';\n  }\n}\n\nconst now = Date.now();\nconst itemsToInsert = raw.filter(item => item && item.url).map((item, idx) => {\n  const domain = extractDomain(item.url);\n  const title = item.title && item.title.trim().length > 0 ? item.title.trim() : domain;\n  const id = 'pg_' + (now + idx).toString(36) + Math.random().toString(36).slice(2, 6);\n  const favicon = item.favicon || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;\n\n  return {\n    id: id,\n    url: item.url,\n    title: title,\n    domain: domain,\n    favicon: favicon,\n    groupId: item.groupId ?? null,\n    notes: item.notes || '',\n    isFavorite: Boolean(item.isFavorite),\n    createdAt: new Date(now + idx).toISOString()\n  };\n});\n\nreturn itemsToInsert.map(item => ({ json: item }));\n"
+      },
+      "id": "66869063-59cc-4701-b776-85ad130f0e61",
+      "name": "Code - Prepare Pages Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "pages",
+        "fields": "id,url,title,domain,favicon,groupId,notes,isFavorite,createdAt"
+      },
+      "id": "470490f6-21a7-44d1-837f-9bb0dde1ff96",
+      "name": "MongoDB - Insert Pages",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        420
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recompilar itens criados em um array para resposta HTTP\nconst createdItems = $('Code - Prepare Pages Insert').all().map(i => i.json);\nreturn [{ json: { created: createdItems } }];\n"
+      },
+      "id": "812c16cd-6473-4427-b0db-13972a39f803",
+      "name": "Code - Format Created Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.created }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "id": "22c7c843-31db-479c-9853-3beee46ba088",
+      "name": "Respond - Pages Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "PATCH",
+        "path": "pages/:id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "c4ca6de8-bf86-4dad-8d95-19fe7bf3e38c",
+      "name": "Webhook - PATCH Page",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        640
+      ],
+      "webhookId": "organizador-patch-page"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar campos atualizados da página (favoritar, mover de grupo, notas, título)\nconst pageId = $json.params?.id;\nconst body = $json.body || {};\n\nconst updateData = {\n  id: pageId\n};\n\nif (body.title !== undefined) updateData.title = body.title;\nif (body.notes !== undefined) updateData.notes = body.notes;\nif (body.groupId !== undefined) updateData.groupId = body.groupId;\nif (body.isFavorite !== undefined) updateData.isFavorite = Boolean(body.isFavorite);\n\nreturn [{ json: updateData }];\n"
+      },
+      "id": "aa9b3370-ea2a-4b12-b188-a0e5bb063e77",
+      "name": "Code - Prepare Page Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "pages",
+        "updateKey": "id",
+        "fields": "title,notes,groupId,isFavorite"
+      },
+      "id": "dbecb40a-4107-478b-9016-603829df4fcf",
+      "name": "MongoDB - Update Page",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        640
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "pages",
+        "query": "={\"id\": \"{{ $('Code - Prepare Page Update').first().json.id }}\"}"
+      },
+      "id": "5adeb60f-befb-4cf1-803e-e9339ed27d7d",
+      "name": "MongoDB - Find Updated Page",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        640
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatar página atualizada para resposta\nconst p = $input.first()?.json || $('Code - Prepare Page Update').first().json;\nreturn [{\n  json: {\n    id: String(p.id || p._id),\n    url: String(p.url || ''),\n    title: String(p.title || p.domain || ''),\n    domain: String(p.domain || ''),\n    favicon: p.favicon || '',\n    groupId: p.groupId !== undefined ? p.groupId : null,\n    notes: p.notes || '',\n    isFavorite: Boolean(p.isFavorite),\n    createdAt: p.createdAt || new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "f516cba2-305b-4a45-8613-5f7484e9233f",
+      "name": "Code - Format Updated Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "38bb841d-b383-47ea-b075-118dd3a49fe4",
+      "name": "Respond - Page Updated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "DELETE",
+        "path": "pages/:id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "aca6f8ac-0745-484b-9974-71cc28ca772b",
+      "name": "Webhook - DELETE Page",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        860
+      ],
+      "webhookId": "organizador-delete-page"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "collection": "pages",
+        "query": "={\"id\": \"{{ $json.params.id }}\"}"
+      },
+      "id": "fd554166-5229-4047-bad2-7ac25712419e",
+      "name": "MongoDB - Delete Page",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        860
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\\\"success\\\": true, \\\"deletedPageId\\\": \\\"{{ $('Webhook - DELETE Page').first().json.params.id }}\\\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "cb166722-24eb-43fc-83b2-8f277e68d499",
+      "name": "Respond - Page Deleted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        860
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - GET Pages": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Find Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Find Pages": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Pages": {
+      "main": [
+        [
+          {
+            "node": "Respond - Pages List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - POST Pages": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Pages Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Pages Insert": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Insert Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Insert Pages": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Created Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Created Pages": {
+      "main": [
+        [
+          {
+            "node": "Respond - Pages Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - PATCH Page": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Page Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Page Update": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Update Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Update Page": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Find Updated Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Find Updated Page": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Updated Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Updated Page": {
+      "main": [
+        [
+          {
+            "node": "Respond - Page Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - DELETE Page": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Delete Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Delete Page": {
+      "main": [
+        [
+          {
+            "node": "Respond - Page Deleted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Organizador de Abas"
+    }
+  ]
+}

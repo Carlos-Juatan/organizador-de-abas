@@ -1,0 +1,26 @@
+services:
+  organizador-de-abas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_STORAGE_MODE=n8n
+    container_name: organizador-de-abas
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - HOSTNAME=0.0.0.0
+      - NODE_ENV=production
+      # Modo de armazenamento ativado para n8n + MongoDB
+      - NEXT_PUBLIC_STORAGE_MODE=n8n
+      # URL interna do n8n na rede Docker local-shared-net
+      - N8N_WEBHOOK_BASE_URL=http://n8n:5678/webhook
+      - N8N_WEBHOOK_AUTH_TOKEN=
+    networks:
+      - local-shared-net
+
+networks:
+  local-shared-net:
+    external: true

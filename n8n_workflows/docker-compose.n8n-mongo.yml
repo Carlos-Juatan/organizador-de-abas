@@ -1,0 +1,94 @@
+services:
+  # 🍃 MongoDB - Banco de Dados NoSQL
+  mongodb:
+    image: mongo:7.0
+    container_name: tab-organizer-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=adminpassword
+      - MONGO_INITDB_DATABASE=organizador_abas
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 🖥️ Interface Gráfica Web para o MongoDB (Opcional, porta 8081)
+  mongo-express:
+    image: mongo-express:1.0.2
+    container_name: tab-organizer-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=adminpassword
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:adminpassword@mongodb:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # ⚙️ n8n - Plataforma de Automação de Workflows (porta 5678)
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: tab-organizer-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_DEFAULT_BINARY_DATA_MODE=default
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_HIRING_BANNER_ENABLED=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./:/data/n8n_workflows:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # 🚀 Frontend Next.js (Organizador de Abas, porta 3003)
+  organizador-de-abas:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: tab-organizer-frontend
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - HOSTNAME=0.0.0.0
+      - NODE_ENV=production
+      - NEXT_PUBLIC_STORAGE_MODE=n8n
+      - N8N_WEBHOOK_BASE_URL=http://n8n:5678/webhook
+      - N8N_WEBHOOK_AUTH_TOKEN=
+    depends_on:
+      - n8n
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  n8n_data:

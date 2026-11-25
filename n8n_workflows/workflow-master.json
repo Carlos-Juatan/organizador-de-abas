@@ -1,0 +1,1023 @@
+{
+  "name": "Organizador de Abas - Backend Completo (Master)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "groups",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7299c103-4d8c-45e1-9107-d05ca18150d2",
+      "name": "Webhook - GET Groups",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        200
+      ],
+      "webhookId": "organizador-get-groups"
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "groups",
+        "options": {
+          "sort": "{\"createdAt\": 1}"
+        }
+      },
+      "id": "26497d46-f8f1-487a-8875-cf7806112f4d",
+      "name": "MongoDB - Find Groups",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        200
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatar grupos retornados do MongoDB para o contrato esperado pelo frontend\nconst items = $input.all();\nconst groups = [];\n\nfor (const item of items) {\n  const g = item.json;\n  if (g && (g.id || g._id)) {\n    groups.push({\n      id: String(g.id || g._id),\n      name: String(g.name || 'Sem nome'),\n      emoji: String(g.emoji || '📁'),\n      color: String(g.color || '#c86446'),\n      createdAt: g.createdAt || new Date().toISOString(),\n      ...(g.updatedAt ? { updatedAt: g.updatedAt } : {})\n    });\n  }\n}\n\nreturn [{ json: { groups } }];\n"
+      },
+      "id": "73ebbb63-183e-47f5-8b57-3f0ff90fd851",
+      "name": "Code - Format Groups",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.groups }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "be705999-271e-415d-969b-644463bfb1a1",
+      "name": "Respond - Groups List",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "groups",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1c0ce258-9b5d-42e2-94dd-54dbd05acc38",
+      "name": "Webhook - POST Group",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        420
+      ],
+      "webhookId": "organizador-post-group"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar documento de novo grupo\nconst body = $json.body || $json;\nconst now = new Date().toISOString();\nconst id = 'grp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);\n\nconst newGroup = {\n  id: id,\n  name: body.name || 'Novo Grupo',\n  emoji: body.emoji || '📁',\n  color: body.color || '#c86446',\n  createdAt: now\n};\n\nreturn [{ json: newGroup }];\n"
+      },
+      "id": "ed663348-0fcb-4669-bec2-75578453bf6b",
+      "name": "Code - Prepare Group Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "groups",
+        "fields": "id,name,emoji,color,createdAt"
+      },
+      "id": "95e463bd-9dcd-477b-91f6-569b080b8ffa",
+      "name": "MongoDB - Insert Group",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        420
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $('Code - Prepare Group Insert').first().json }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "id": "98ffca5a-2588-4b25-bb5e-613473f97d5f",
+      "name": "Respond - Group Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "PATCH",
+        "path": "groups/:id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7ae190cc-dfc2-4260-b893-c6bb0fbfa6c9",
+      "name": "Webhook - PATCH Group",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        640
+      ],
+      "webhookId": "organizador-patch-group"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar campos atualizados do grupo\nconst groupId = $json.params?.id;\nconst body = $json.body || {};\nconst now = new Date().toISOString();\n\nconst updateData = {\n  id: groupId,\n  updatedAt: now\n};\n\nif (body.name !== undefined) updateData.name = body.name;\nif (body.emoji !== undefined) updateData.emoji = body.emoji;\nif (body.color !== undefined) updateData.color = body.color;\n\nreturn [{ json: updateData }];\n"
+      },
+      "id": "4d4ef042-37f0-4905-935d-352a69295b65",
+      "name": "Code - Prepare Group Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "groups",
+        "updateKey": "id",
+        "fields": "name,emoji,color,updatedAt"
+      },
+      "id": "eb310986-08e9-45f0-8969-ee586140a271",
+      "name": "MongoDB - Update Group",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        640
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "groups",
+        "query": "={\"id\": \"{{ $('Code - Prepare Group Update').first().json.id }}\"}"
+      },
+      "id": "98ef724b-b76e-4cc2-943e-e1e32826de81",
+      "name": "MongoDB - Find Updated Group",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        640
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatar o grupo atualizado para retorno\nconst g = $input.first()?.json || $('Code - Prepare Group Update').first().json;\nreturn [{\n  json: {\n    id: String(g.id || g._id),\n    name: String(g.name || ''),\n    emoji: String(g.emoji || '📁'),\n    color: String(g.color || '#c86446'),\n    createdAt: g.createdAt || new Date().toISOString(),\n    updatedAt: g.updatedAt || new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "2dbae26f-2374-4521-b9f6-d985887da71a",
+      "name": "Code - Format Updated Group",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "e8c5f295-ae5a-4dda-8b2e-de8769afe2fe",
+      "name": "Respond - Group Updated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "DELETE",
+        "path": "groups/:id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "31dfe749-e520-427f-8aa5-de09ada17063",
+      "name": "Webhook - DELETE Group",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        860
+      ],
+      "webhookId": "organizador-delete-group"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extrair ID do grupo a ser excluído\nconst groupId = $json.params?.id;\nreturn [{ json: { groupId } }];\n"
+      },
+      "id": "ea70b6e4-fd64-4e54-aee3-c1646ef8f90e",
+      "name": "Code - Extract Delete Group ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "collection": "groups",
+        "query": "={\"id\": \"{{ $json.groupId }}\"}"
+      },
+      "id": "7f3226a6-ad34-4d30-81f2-3ae0402882b6",
+      "name": "MongoDB - Delete Group",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        860
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\\\"success\\\": true, \\\"deletedGroupId\\\": \\\"{{ $('Code - Extract Delete Group ID').first().json.groupId }}\\\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4ac421c2-12ba-4614-bb0e-275eb2e3124a",
+      "name": "Respond - Group Deleted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        860
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "pages",
+        "query": "={\"groupId\": \"{{ $('Code - Extract Delete Group ID').first().json.groupId }}\"}"
+      },
+      "id": "c78ede2d-1e3e-49ea-8058-58108e4df353",
+      "name": "MongoDB - Find Pages In Deleted Group",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        1020
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reatribuir páginas do grupo deletado para Inbox (groupId = null)\nconst items = $input.all();\nif (!items || items.length === 0 || !items[0].json?.id) {\n  return [];\n}\nreturn items.map(item => ({\n  json: {\n    id: item.json.id,\n    groupId: null\n  }\n}));\n"
+      },
+      "id": "8272af8e-39ce-4ee3-8da4-112aa63a9d67",
+      "name": "Code - Reassign Pages To Inbox",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "pages",
+        "updateKey": "id",
+        "fields": "groupId"
+      },
+      "id": "cdbe9356-48b4-4e6d-953a-3fa7aeea96c5",
+      "name": "MongoDB - Update Pages Reassigned",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        1020
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "pages",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f3001a6b-be59-44a3-bc93-b229dcba94e8",
+      "name": "Webhook - GET Pages",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1300
+      ],
+      "webhookId": "organizador-get-pages"
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "pages",
+        "options": {
+          "sort": "{\"createdAt\": -1}"
+        }
+      },
+      "id": "6faf22f4-7cf8-44dd-9528-d34f61ac022d",
+      "name": "MongoDB - Find Pages",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        1300
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatar lista de páginas retornadas do MongoDB\nconst items = $input.all();\nconst pages = [];\n\nfor (const item of items) {\n  const p = item.json;\n  if (p && (p.url || p.id)) {\n    const domain = p.domain || (p.url ? (() => {\n      try {\n        const u = new URL(p.url.startsWith('http') ? p.url : 'https://' + p.url);\n        return u.hostname.replace(/^www\\./, '');\n      } catch (e) {\n        return '';\n      }\n    })() : '');\n\n    pages.push({\n      id: String(p.id || p._id),\n      url: String(p.url || ''),\n      title: String(p.title || domain || 'Sem título'),\n      domain: domain,\n      favicon: p.favicon || (domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64` : ''),\n      groupId: p.groupId !== undefined ? p.groupId : null,\n      notes: p.notes || '',\n      isFavorite: Boolean(p.isFavorite),\n      createdAt: p.createdAt || new Date().toISOString()\n    });\n  }\n}\n\nreturn [{ json: { pages } }];\n"
+      },
+      "id": "9ab67563-3050-4427-b666-81628fbc1e25",
+      "name": "Code - Format Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.pages }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "aa05011a-848f-4575-b7cd-cc2b7bae8177",
+      "name": "Respond - Pages List",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        1300
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pages",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "69831960-c95d-4949-9fe3-ca64b0329982",
+      "name": "Webhook - POST Pages",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1520
+      ],
+      "webhookId": "organizador-post-pages"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Suporta tanto criação individual quanto criação em lote (bulk import)\nlet raw = $json.body;\nif (!raw && Array.isArray($json)) raw = $json;\nif (!raw && typeof $json === 'object') raw = [$json];\nif (!Array.isArray(raw)) raw = [raw];\n\nfunction extractDomain(urlStr) {\n  try {\n    const u = new URL(urlStr.startsWith('http') ? urlStr : 'https://' + urlStr);\n    return u.hostname.replace(/^www\\./, '');\n  } catch (e) {\n    return urlStr || '';\n  }\n}\n\nconst now = Date.now();\nconst itemsToInsert = raw.filter(item => item && item.url).map((item, idx) => {\n  const domain = extractDomain(item.url);\n  const title = item.title && item.title.trim().length > 0 ? item.title.trim() : domain;\n  const id = 'pg_' + (now + idx).toString(36) + Math.random().toString(36).slice(2, 6);\n  const favicon = item.favicon || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64`;\n\n  return {\n    id: id,\n    url: item.url,\n    title: title,\n    domain: domain,\n    favicon: favicon,\n    groupId: item.groupId ?? null,\n    notes: item.notes || '',\n    isFavorite: Boolean(item.isFavorite),\n    createdAt: new Date(now + idx).toISOString()\n  };\n});\n\nreturn itemsToInsert.map(item => ({ json: item }));\n"
+      },
+      "id": "63a8fffb-9655-4694-a2c9-d089de84fca7",
+      "name": "Code - Prepare Pages Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "pages",
+        "fields": "id,url,title,domain,favicon,groupId,notes,isFavorite,createdAt"
+      },
+      "id": "2ec60279-615c-4135-8901-9d6f29884abb",
+      "name": "MongoDB - Insert Pages",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        1520
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recompilar itens criados em um array para resposta HTTP\nconst createdItems = $('Code - Prepare Pages Insert').all().map(i => i.json);\nreturn [{ json: { created: createdItems } }];\n"
+      },
+      "id": "f716090b-b96c-40ab-aded-56e68cb619f2",
+      "name": "Code - Format Created Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.created }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "id": "23a5506e-c493-485b-af7d-9f940350d842",
+      "name": "Respond - Pages Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "PATCH",
+        "path": "pages/:id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "370d215f-18dd-468f-8a96-c9650484e807",
+      "name": "Webhook - PATCH Page",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1740
+      ],
+      "webhookId": "organizador-patch-page"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar campos atualizados da página (favoritar, mover de grupo, notas, título)\nconst pageId = $json.params?.id;\nconst body = $json.body || {};\n\nconst updateData = {\n  id: pageId\n};\n\nif (body.title !== undefined) updateData.title = body.title;\nif (body.notes !== undefined) updateData.notes = body.notes;\nif (body.groupId !== undefined) updateData.groupId = body.groupId;\nif (body.isFavorite !== undefined) updateData.isFavorite = Boolean(body.isFavorite);\n\nreturn [{ json: updateData }];\n"
+      },
+      "id": "e85e86c9-f5ca-448c-856d-1b24e5467bc6",
+      "name": "Code - Prepare Page Update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        1740
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "pages",
+        "updateKey": "id",
+        "fields": "title,notes,groupId,isFavorite"
+      },
+      "id": "8ac6c9fa-7a6c-4874-90dd-1b31d8b425e4",
+      "name": "MongoDB - Update Page",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        1740
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "find",
+        "collection": "pages",
+        "query": "={\"id\": \"{{ $('Code - Prepare Page Update').first().json.id }}\"}"
+      },
+      "id": "a0de1eeb-1765-4d95-8687-cd345c974bfe",
+      "name": "MongoDB - Find Updated Page",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        1740
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatar página atualizada para resposta\nconst p = $input.first()?.json || $('Code - Prepare Page Update').first().json;\nreturn [{\n  json: {\n    id: String(p.id || p._id),\n    url: String(p.url || ''),\n    title: String(p.title || p.domain || ''),\n    domain: String(p.domain || ''),\n    favicon: p.favicon || '',\n    groupId: p.groupId !== undefined ? p.groupId : null,\n    notes: p.notes || '',\n    isFavorite: Boolean(p.isFavorite),\n    createdAt: p.createdAt || new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "7d47fcd0-36be-42eb-ab2d-890e767f57b9",
+      "name": "Code - Format Updated Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        1740
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "08b6c33f-ebc9-4941-a9e0-74dca0cc2da7",
+      "name": "Respond - Page Updated",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1440,
+        1740
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "DELETE",
+        "path": "pages/:id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b883cead-781d-4c7c-8e30-fb617db9b6f8",
+      "name": "Webhook - DELETE Page",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        1960
+      ],
+      "webhookId": "organizador-delete-page"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "collection": "pages",
+        "query": "={\"id\": \"{{ $json.params.id }}\"}"
+      },
+      "id": "44b19d0b-d93d-40e5-859a-8824da233387",
+      "name": "MongoDB - Delete Page",
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        1960
+      ],
+      "credentials": {
+        "mongoDb": {
+          "id": "mongoDbCredential",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\\\"success\\\": true, \\\"deletedPageId\\\": \\\"{{ $('Webhook - DELETE Page').first().json.params.id }}\\\"}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "8a344b99-e9df-440f-b605-825b6ec1cde2",
+      "name": "Respond - Page Deleted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        1960
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - GET Groups": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Find Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Find Groups": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Groups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Groups": {
+      "main": [
+        [
+          {
+            "node": "Respond - Groups List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - POST Group": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Group Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Group Insert": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Insert Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Insert Group": {
+      "main": [
+        [
+          {
+            "node": "Respond - Group Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - PATCH Group": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Group Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Group Update": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Update Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Update Group": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Find Updated Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Find Updated Group": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Updated Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Updated Group": {
+      "main": [
+        [
+          {
+            "node": "Respond - Group Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - DELETE Group": {
+      "main": [
+        [
+          {
+            "node": "Code - Extract Delete Group ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extract Delete Group ID": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Delete Group",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "MongoDB - Find Pages In Deleted Group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Delete Group": {
+      "main": [
+        [
+          {
+            "node": "Respond - Group Deleted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Find Pages In Deleted Group": {
+      "main": [
+        [
+          {
+            "node": "Code - Reassign Pages To Inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Reassign Pages To Inbox": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Update Pages Reassigned",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - GET Pages": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Find Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Find Pages": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Pages": {
+      "main": [
+        [
+          {
+            "node": "Respond - Pages List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - POST Pages": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Pages Insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Pages Insert": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Insert Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Insert Pages": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Created Pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Created Pages": {
+      "main": [
+        [
+          {
+            "node": "Respond - Pages Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - PATCH Page": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare Page Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare Page Update": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Update Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Update Page": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Find Updated Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Find Updated Page": {
+      "main": [
+        [
+          {
+            "node": "Code - Format Updated Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Format Updated Page": {
+      "main": [
+        [
+          {
+            "node": "Respond - Page Updated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - DELETE Page": {
+      "main": [
+        [
+          {
+            "node": "MongoDB - Delete Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MongoDB - Delete Page": {
+      "main": [
+        [
+          {
+            "node": "Respond - Page Deleted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "Organizador de Abas"
+    }
+  ]
+}
